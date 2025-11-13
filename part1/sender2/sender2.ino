@@ -1,49 +1,67 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-// آدرس MAC گیرنده
-uint8_t receiverAddress[] = {0x00, 0x4B, 0x12, 0xEF, 0x1B, 0x44};
+// MAC address of the receiver device
+static const uint8_t kReceiverAddress[6] = { 0x00, 0x4B, 0x12, 0xEF, 0x1B, 0x44 };
 
-// نام فرستنده (برای تشخیص در گیرنده)
-const char* senderName = "Sender2";
-int counter = 1;
+// Identifier for this sender (included in outgoing messages)
+static const char* kSenderId = "Sender2";
 
-void onSent(const wifi_tx_info_t *mac_addr, esp_now_send_status_t status) {
-  Serial.print("وضعیت ارسال: ");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "✅ موفق" : "❌ ناموفق");
+// Message counter
+static uint32_t messageCounter = 1;
+
+/**
+ * Callback invoked after a message is transmitted.
+ */
+void onMessageSent(const wifi_tx_info_t* info, esp_now_send_status_t status) {
+  const char* result = (status == ESP_NOW_SEND_SUCCESS) ? "Success" : "Failed";
+  Serial.printf("[ESP-NOW] Transmission status: %s\n", result);
 }
 
 void setup() {
   Serial.begin(115200);
   WiFi.mode(WIFI_STA);
 
+  // Initialize ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    Serial.println("❌ خطا در مقداردهی ESP-NOW");
+    Serial.println("[Error] ESP-NOW initialization failed");
     return;
   }
 
-  esp_now_register_send_cb(onSent);
+  esp_now_register_send_cb(onMessageSent);
 
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, receiverAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
+  // Register receiver peer
+  esp_now_peer_info_t peer{};
+  memcpy(peer.peer_addr, kReceiverAddress, sizeof(kReceiverAddress));
+  peer.channel = 0;
+  peer.encrypt = false;
 
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("❌ خطا در افزودن گیرنده");
+  if (esp_now_add_peer(&peer) != ESP_OK) {
+    Serial.println("[Error] Failed to register peer");
     return;
   }
 
-  Serial.println("✅ فرستنده 2 آماده است...");
+  Serial.println("[System] Sender initialized and ready");
 }
 
 void loop() {
-  if (counter <= 10000) {
-    String msg = String(senderName) + ":" + String(counter);
-    esp_now_send(receiverAddress, (uint8_t *)msg.c_str(), msg.length());
-    Serial.print("📤 ارسال شد: ");
-    Serial.println(msg);
-    counter++;
-    delay(50);
+  if (messageCounter > 10000) {
+    return;
   }
+
+  // Build message in the format: SenderID:Counter
+  char payload[32];
+  snprintf(payload, sizeof(payload), "%s:%lu", kSenderId, messageCounter);
+
+  // Send the message
+  esp_err_t result = esp_now_send(kReceiverAddress, (uint8_t*)payload, strlen(payload));
+
+  if (result == ESP_OK) {
+    Serial.printf("[TX] Sent: %s\n", payload);
+  } else {
+    Serial.printf("[TX Error] Failed to send message: %s\n", payload);
+  }
+
+  messageCounter++;
+  delay(50);
 }
