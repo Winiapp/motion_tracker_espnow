@@ -6,7 +6,7 @@ uint8_t receiverAddress[] = {0x00, 0x4B, 0x12, 0xEF, 0x1B, 0x44};
 
 bool startSending = false;
 int counter = 1;
-const char* senderName = "Sender1";  // For the second device, set "Sender2"
+const char* senderName = "Sender1";  
 
 // Callback: runs when a message is received from the receiver
 void onReceive(const esp_now_recv_info *info, const uint8_t *data, int len) {
